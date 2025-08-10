@@ -1,0 +1,310 @@
+<!--
+Allan CORNET
+nelson.numerical.computation@gmail.com
+https://github.com/Nelson-numerical-software/AES-256-CBC
+-->
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1" />
+<title>AES-256-CBC Encrypt / Decrypt with PBKDF2</title>
+<style>
+  body { font-family: Arial, sans-serif; max-width: 600px; margin: 40px auto; }
+  input[type=text], textarea, input[type=password] {
+    width: 100%; padding: 10px; margin: 10px 0; font-size: 1rem;
+    box-sizing: border-box;
+  }
+  button {
+    padding: 10px 20px; font-size: 1rem; margin-right: 10px; cursor: pointer;
+  }
+  pre {
+    background: #eee; padding: 10px; white-space: pre-wrap; word-break: break-word;
+    margin-top: 0; margin-bottom: 10px;
+  }
+  .reminder-block {
+    background: #f9f9f9; border-left: 4px solid #888; padding: 10px; margin-top: 20px; font-family: monospace; white-space: pre-wrap;
+    position: relative;
+  }
+  .copy-btn {
+    position: absolute;
+    top: 8px;
+    right: 8px;
+    padding: 3px 8px;
+    font-size: 0.8rem;
+    cursor: pointer;
+  }
+  .container {
+    position: relative;
+  }
+  .copied-msg {
+    position: absolute;
+    top: 10px;
+    right: 60px;
+    font-size: 0.8rem;
+    color: green;
+    user-select: none;
+    opacity: 0;
+    transition: opacity 0.3s ease;
+  }
+  .copied-msg.visible {
+    opacity: 1;
+  }
+</style>
+</head>
+<body>
+
+<h2>AES-256-CBC Encrypt / Decrypt with PBKDF2</h2>
+
+<label for="singleLineInput">Single-line input:</label>
+<input type="text" id="singleLineInput" placeholder="Enter single line text" autocomplete="off" />
+
+<label for="multiLineInput">Multiline input:</label>
+<textarea id="multiLineInput" rows="5" placeholder="Enter multiline text"></textarea>
+
+<label for="password">Password:</label>
+<input type="password" id="password" placeholder="Enter your key/password" autocomplete="off" />
+
+<div>
+  <button id="btnEncrypt">Encrypt</button>
+  <button id="btnDecrypt">Decrypt</button>
+</div>
+
+<h3>Output:</h3>
+<div class="container" id="output-container">
+  <pre id="output"></pre>
+  <button class="copy-btn" id="copyOutputBtn" title="Copy output">Copy</button>
+  <span class="copied-msg" id="copiedOutputMsg">Copied!</span>
+</div>
+
+<h3>OpenSSL Command Line Reminder:</h3>
+
+<div class="container reminder-block" id="encrypt-container">
+  <strong>Encrypt command:</strong>
+  <pre id="opensslEncrypt"></pre>
+  <button class="copy-btn" id="copyEncryptBtn" title="Copy encrypt command">Copy</button>
+  <span class="copied-msg" id="copiedEncryptMsg">Copied!</span>
+</div>
+
+<div class="container reminder-block" id="decrypt-container">
+  <strong>Decrypt command:</strong>
+  <pre id="opensslDecrypt"></pre>
+  <button class="copy-btn" id="copyDecryptBtn" title="Copy decrypt command">Copy</button>
+  <span class="copied-msg" id="copiedDecryptMsg">Copied!</span>
+</div>
+
+<script>
+// Helpers
+function strToUint8Array(str) {
+  return new TextEncoder().encode(str);
+}
+function uint8ArrayToStr(buf) {
+  return new TextDecoder().decode(buf);
+}
+function arrayBufferToBase64(buffer) {
+  const bytes = new Uint8Array(buffer);
+  let binary = '';
+  for (let b of bytes) binary += String.fromCharCode(b);
+  return btoa(binary);
+}
+function base64ToArrayBuffer(base64) {
+  const binary = atob(base64);
+  const bytes = new Uint8Array(binary.length);
+  for (let i = 0; i < binary.length; i++) bytes[i] = binary.charCodeAt(i);
+  return bytes.buffer;
+}
+
+// Get input text respecting exclusivity
+function getInputText() {
+  const single = document.getElementById('singleLineInput').value.trim();
+  const multi = document.getElementById('multiLineInput').value.trim();
+  if (multi !== '') return multi;
+  if (single !== '') return single;
+  return '';
+}
+
+// Escape double quotes for shell
+function escapeForShell(str) {
+  return str.replace(/(["\\$`])/g, '\\$1');
+}
+
+// Update the OpenSSL command reminder live
+// Accepts encryptedBase64 string for decrypt cmd and plainText for encrypt cmd
+function updateOpenSSLReminder(encryptedBase64 = null, plainText = null) {
+  const text = plainText !== null ? plainText : getInputText();
+  const password = document.getElementById('password').value;
+
+  if (!text || !password) {
+    document.getElementById('opensslEncrypt').textContent =
+      'OpenSSL encrypt command will appear here when you enter text and password.';
+    document.getElementById('opensslDecrypt').textContent =
+      'OpenSSL decrypt command will appear here when you enter text and password.';
+    return;
+  }
+
+  const escapedText = escapeForShell(text);
+  const pass = escapeForShell(password);
+
+  document.getElementById('opensslEncrypt').textContent =
+    `echo -n "${escapedText}" | openssl enc -aes-256-cbc -base64 -pbkdf2 -iter 100000 -pass pass:${pass}`;
+
+  document.getElementById('opensslDecrypt').textContent =
+    encryptedBase64
+      ? `echo "${encryptedBase64}" | openssl enc -aes-256-cbc -d -base64 -pbkdf2 -iter 100000 -pass pass:${pass}`
+      : `echo "ENCRYPTED_BASE64_STRING" | openssl enc -aes-256-cbc -d -base64 -pbkdf2 -iter 100000 -pass pass:${pass}`;
+}
+
+// Exclusivity logic
+document.getElementById('singleLineInput').addEventListener('input', () => {
+  if (document.getElementById('singleLineInput').value.trim() !== '') {
+    document.getElementById('multiLineInput').value = '';
+  }
+  updateOpenSSLReminder();
+});
+document.getElementById('multiLineInput').addEventListener('input', () => {
+  if (document.getElementById('multiLineInput').value.trim() !== '') {
+    document.getElementById('singleLineInput').value = '';
+  }
+  updateOpenSSLReminder();
+});
+document.getElementById('password').addEventListener('input', () => {
+  updateOpenSSLReminder();
+});
+
+// Encryption function
+async function encrypt() {
+  const text = getInputText();
+  const password = document.getElementById('password').value;
+  const output = document.getElementById('output');
+
+  if (!text || !password) {
+    alert('Please enter text (single line OR multiline) and password.');
+    return;
+  }
+
+  try {
+    const salt = crypto.getRandomValues(new Uint8Array(8));
+    const pwUtf8 = strToUint8Array(password);
+    const keyMaterial = await crypto.subtle.importKey('raw', pwUtf8, 'PBKDF2', false, ['deriveBits']);
+    const derivedBits = await crypto.subtle.deriveBits(
+      { name: 'PBKDF2', salt: salt, iterations: 100000, hash: 'SHA-256' },
+      keyMaterial,
+      48 * 8
+    );
+    const derivedBytes = new Uint8Array(derivedBits);
+    const keyBytes = derivedBytes.slice(0, 32);
+    const ivBytes = derivedBytes.slice(32, 48);
+
+    const key = await crypto.subtle.importKey('raw', keyBytes, 'AES-CBC', false, ['encrypt']);
+    const encryptedBuffer = await crypto.subtle.encrypt(
+      { name: 'AES-CBC', iv: ivBytes },
+      key,
+      strToUint8Array(text)
+    );
+
+    const opensslPrefix = new TextEncoder().encode('Salted__');
+    const saltedBytes = new Uint8Array(opensslPrefix.length + salt.length + encryptedBuffer.byteLength);
+    saltedBytes.set(opensslPrefix, 0);
+    saltedBytes.set(salt, opensslPrefix.length);
+    saltedBytes.set(new Uint8Array(encryptedBuffer), opensslPrefix.length + salt.length);
+
+    const base64Result = arrayBufferToBase64(saltedBytes.buffer);
+    output.textContent = base64Result;
+
+    // Update reminder with actual encrypted string and plaintext
+    updateOpenSSLReminder(base64Result, text);
+  } catch (e) {
+    output.textContent = 'Error encrypting: ' + e.message;
+  }
+}
+
+// Decryption function
+async function decrypt() {
+  const base64Input = getInputText();
+  const password = document.getElementById('password').value;
+  const output = document.getElementById('output');
+
+  if (!base64Input || !password) {
+    alert('Please enter encrypted Base64 text (single line OR multiline) and password.');
+    return;
+  }
+
+  try {
+    const encryptedBytes = new Uint8Array(base64ToArrayBuffer(base64Input));
+    const saltedPrefix = new TextEncoder().encode('Salted__');
+
+    for (let i = 0; i < saltedPrefix.length; i++) {
+      if (encryptedBytes[i] !== saltedPrefix[i]) throw new Error('Invalid data format (missing Salted__ prefix)');
+    }
+
+    const salt = encryptedBytes.slice(saltedPrefix.length, saltedPrefix.length + 8);
+    const data = encryptedBytes.slice(saltedPrefix.length + 8);
+
+    const pwUtf8 = strToUint8Array(password);
+    const keyMaterial = await crypto.subtle.importKey('raw', pwUtf8, 'PBKDF2', false, ['deriveBits']);
+    const derivedBits = await crypto.subtle.deriveBits(
+      { name: 'PBKDF2', salt: salt, iterations: 100000, hash: 'SHA-256' },
+      keyMaterial,
+      48 * 8
+    );
+    const derivedBytes = new Uint8Array(derivedBits);
+    const keyBytes = derivedBytes.slice(0, 32);
+    const ivBytes = derivedBytes.slice(32, 48);
+
+    const key = await crypto.subtle.importKey('raw', keyBytes, 'AES-CBC', false, ['decrypt']);
+    const decryptedBuffer = await crypto.subtle.decrypt(
+      { name: 'AES-CBC', iv: ivBytes },
+      key,
+      data
+    );
+
+    const decryptedText = uint8ArrayToStr(new Uint8Array(decryptedBuffer));
+    output.textContent = decryptedText;
+
+    // Update reminder with encrypted base64 input and decrypted plaintext
+    updateOpenSSLReminder(base64Input, decryptedText);
+  } catch (e) {
+    output.textContent = 'Error decrypting: ' + e.message;
+  }
+}
+
+// Copy text helper with fade message
+function copyTextFromElement(elementId, msgId) {
+  const el = document.getElementById(elementId);
+  if (!el) {
+    alert('Element not found: ' + elementId);
+    return;
+  }
+  const text = el.textContent.trim();
+  if (!text) {
+    alert('Nothing to copy!');
+    return;
+  }
+  navigator.clipboard.writeText(text).then(() => {
+    const msg = document.getElementById(msgId);
+    msg.classList.add('visible');
+    setTimeout(() => msg.classList.remove('visible'), 1500);
+  }, () => {
+    alert('Failed to copy!');
+  });
+}
+
+document.getElementById('copyOutputBtn').addEventListener('click', () => {
+  copyTextFromElement('output', 'copiedOutputMsg');
+});
+document.getElementById('copyEncryptBtn').addEventListener('click', () => {
+  copyTextFromElement('opensslEncrypt', 'copiedEncryptMsg');
+});
+document.getElementById('copyDecryptBtn').addEventListener('click', () => {
+  copyTextFromElement('opensslDecrypt', 'copiedDecryptMsg');
+});
+
+document.getElementById('btnEncrypt').addEventListener('click', encrypt);
+document.getElementById('btnDecrypt').addEventListener('click', decrypt);
+
+// Initialize reminder on page load
+updateOpenSSLReminder();
+</script>
+
+</body>
+</html>
